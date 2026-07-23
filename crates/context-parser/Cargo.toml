@@ -1,0 +1,11 @@
+[package]
+name = "context-parser"
+version = "0.1.0"
+license = "MIT"
+edition = "2024"
+repository = "https://github.com/brasga-a/context"
+
+[dependencies]
+memchr = "2.7.6"
+context-lexer = { path = "../context-lexer" }
+unicode-properties = { version = "0.1.4", features = ["general-category"] }
