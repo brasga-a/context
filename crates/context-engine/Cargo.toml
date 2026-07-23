@@ -1,0 +1,12 @@
+[package]
+name = "context-engine"
+version = "0.1.0"
+license = "MIT"
+edition = "2024"
+repository = "https://github.com/brasga-a/context"
+
+[dependencies]
+blake3 = "1.8.2"
+context-parser = { path = "../context-parser" }
+serde = { version = "1.0.228", features = ["derive"] }
+yaml_serde = "0.10.4"

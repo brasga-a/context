@@ -1,12 +1,11 @@
 # context
 
-A Cargo workspace implementing a structural context engine for Notes Markdown and exposing it to
-AI agents over MCP.
+A Cargo workspace implementing a Notes-Markdown lexer and parser.
 
 ## Workspace layout
 
-- `Cargo.toml` (root) — defines both a `[workspace]` (members: the three crates below) and a
-  `[package]` for the `context` MCP server binary (`src/main.rs`). Root-level `cargo build`,
+- `Cargo.toml` (root) — defines both a `[workspace]` (members: the two crates below) and a
+  `[package]` for a placeholder `context` binary (`src/main.rs`). Root-level `cargo build`,
   `cargo test`, `cargo clippy`, and `cargo fmt` cover everything in the workspace.
 - `crates/context-lexer` — the low-level streaming lexer. Emits context-free token runs with byte
   lengths; the only context-sensitive rule it applies is frontmatter detection at the true document
@@ -18,19 +17,6 @@ AI agents over MCP.
   - `src/inline/entities.rs` is **generated** by `tools/generate_entities.py` (produces the
     WHATWG semicolon-terminated HTML entity table). Never hand-edit this file — rerun the script
     instead.
-- `crates/context-engine` — depends on `context-parser` and derives span-backed section trees,
-  interprets YAML frontmatter, indexes Markdown vaults, and provides outlines, exact section
-  retrieval, and deterministic fuzzy heading search.
-
-The formerly open purpose of `src/main.rs` is resolved: it is the read-only MCP server / CLI
-front-end for `context-engine`. Start it on stdio with:
-
-```
-cargo run -- serve <vault-dir>
-```
-
-The server indexes the vault at startup and advertises `outline`, `get_section`, and `search`
-tools until the stdio transport closes.
 
 Edition 2024 throughout.
 
@@ -45,14 +31,13 @@ cargo clippy --workspace --all-targets
 cargo fmt --check
 ```
 
-Or use the `/check` command (optionally scoped to one crate: `/check context-lexer`).
+Or use the `/check` Codex command (optionally scoped to one crate: `/check context-lexer`).
 
 ## Changelog convention
 
-All three crates keep a `CHANGELOG.md` following
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
-[SemVer 2.0.0](https://semver.org/spec/v2.0.0.html). When you change a crate's source, add or update
-its `## [Unreleased]` section:
+Both crates keep a `CHANGELOG.md` following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
+and [SemVer 2.0.0](https://semver.org/spec/v2.0.0.html). When you change a crate's source, add or
+update its `## [Unreleased]` section:
 
 - A "Provisional version impact" line (e.g. `**MINOR** (0.2.0)`) stating the SemVer bump the
   unreleased changes imply.

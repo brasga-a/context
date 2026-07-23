@@ -1,0 +1,37 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 'C:\\Users\\bradr\\projects\\context\\.codex\\hooks\\guard_entities.py'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 'C:\\Users\\bradr\\projects\\context\\.codex\\hooks\\fmt_on_edit.py'",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 'C:\\Users\\bradr\\projects\\context\\.codex\\hooks\\changelog_reminder.py'"
+          }
+        ]
+      }
+    ]
+  }
+}
