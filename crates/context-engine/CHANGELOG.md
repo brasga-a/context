@@ -26,11 +26,20 @@ is being introduced.
 - Added `VaultIndex::reindex_file` for refreshing one possibly stale index entry from disk.
 - Added `Section::heading_span` recording the heading construct's own byte range (`None` for the
   preamble).
+- Added a vault-wide wikilink graph: `[[Note]]`, `[[Note#Heading]]`, and `[[#Heading]]` targets
+  are resolved (file part by filename stem or full path, heading part by heading text) into a
+  `VaultIndex::backlinks(file, heading_path)` lookup returning `Backlink { from, raw_target,
+  target_heading_path }`. Unresolved or ambiguous targets are non-fatal `VaultDiagnostic` entries.
+  The link index is a whole-vault derived structure, rebuilt in full after every
+  `edit_section`/`reindex_file` call so a change to one file's headings correctly flips
+  resolution for links in other, untouched files.
 
 ### Changed
 
 - `Provenance` (returned by `get_section` and `search`) now includes `content_hash`, the guard
   token for `edit_section`.
+- `VaultIndex.diagnostics` now also carries wikilink-resolution diagnostics alongside the
+  existing walk- and document-level ones.
 
 ## [0.1.0] - 2026-07-23
 

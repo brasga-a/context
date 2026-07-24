@@ -137,6 +137,7 @@ impl VaultIndex {
             message: format!("failed to write '{key}': {error}"),
         })?;
         self.documents.insert(key.clone(), new_document);
+        self.rebuild_links();
         let document = &self.documents[&key];
         Ok(hashed_outline(document.source(), &document.sections))
     }
@@ -155,6 +156,7 @@ impl VaultIndex {
             suggestions: nearest(&key, self.documents.keys().map(String::as_str), 3),
         })?;
         self.documents.insert(key, EngineDocument::parse(source));
+        self.rebuild_links();
         Ok(())
     }
 }

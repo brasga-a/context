@@ -12,9 +12,29 @@ fn indexes_nested_markdown_and_ignores_other_files() {
 
     assert_eq!(
         index.files().collect::<Vec<_>>(),
-        ["lore/weapons.md", "player.md"]
+        ["lore/armor.md", "lore/weapons.md", "player.md"]
     );
-    assert!(index.diagnostics.is_empty());
+    // player.md's Notes section deliberately includes unresolved wikilinks (a missing file, a
+    // missing heading, and an ambiguous heading match), each surfaced as a diagnostic rather
+    // than failing the build.
+    assert!(
+        index
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.message.contains("Nonexistent"))
+    );
+    assert!(
+        index
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.message.contains("weapons#Nothing"))
+    );
+    assert!(
+        index
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.message.contains("armor#Gun Skill"))
+    );
 }
 
 #[test]
@@ -22,7 +42,7 @@ fn outline_preserves_tree_shape_paths_and_line_ranges_without_body_text() {
     let index = VaultIndex::build(fixture_vault()).expect("fixture vault indexes");
     let outline = index.outline("player.md").expect("player outline");
 
-    assert_eq!(outline.len(), 2);
+    assert_eq!(outline.len(), 3);
     assert_eq!(outline[0].heading, "Skills");
     assert_eq!(outline[0].level, 2);
     assert_eq!(outline[0].heading_path, "Skills");
@@ -33,6 +53,7 @@ fn outline_preserves_tree_shape_paths_and_line_ranges_without_body_text() {
     assert_eq!(outline[0].children[0].line_range.start, 7);
     assert_eq!(outline[0].children[0].line_range.end, 8);
     assert_eq!(outline[1].heading_path, "Inventory");
+    assert_eq!(outline[2].heading_path, "Notes");
 }
 
 #[test]

@@ -18,6 +18,10 @@ MCP server CLI.
 - Added the `edit_section` tool: hash-guarded, body-only section replacement returning the edited
   document's outline with fresh per-section hashes; conflict errors carry the section's current
   hash. End-to-end stdio coverage for the read → edit → conflict → escape-rejection loop.
+- Added the `backlinks` tool: every indexed wikilink resolving to a file, optionally narrowed to
+  one heading path, with full section provenance per link. End-to-end stdio coverage for
+  resolved whole-file and file+heading links, narrowing by heading path, and unresolved links
+  coexisting safely with normal tool operation.
 
 ### Changed
 
