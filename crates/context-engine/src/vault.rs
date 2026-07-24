@@ -116,7 +116,16 @@ impl Error for RetrievalError {}
 pub struct VaultIndex {
     pub(crate) root: PathBuf,
     pub(crate) documents: BTreeMap<String, EngineDocument>,
-    /// Non-fatal indexing and document diagnostics.
+    /// Diagnostics from the directory walk and per-document parsing, captured once at build
+    /// time; reindexing a single file does not revisit these.
+    build_diagnostics: Vec<VaultDiagnostic>,
+    /// Every resolved wikilink, keyed by its resolved target file; fully recomputed whenever
+    /// `documents` changes, since a change to one file can flip whether a link in another
+    /// file resolves.
+    backlinks: BTreeMap<String, Vec<crate::links::Backlink>>,
+    /// Unresolved-wikilink diagnostics; fully recomputed alongside `backlinks`.
+    link_diagnostics: Vec<VaultDiagnostic>,
+    /// Non-fatal indexing, document, and wikilink-resolution diagnostics.
     pub diagnostics: Vec<VaultDiagnostic>,
 }
 
@@ -220,10 +229,56 @@ impl VaultIndex {
                 .cmp(&right.file)
                 .then_with(|| left.message.cmp(&right.message))
         });
-        Ok(Self {
+        let mut index = Self {
             root,
             documents,
-            diagnostics,
+            build_diagnostics: diagnostics,
+            backlinks: BTreeMap::new(),
+            link_diagnostics: Vec::new(),
+            diagnostics: Vec::new(),
+        };
+        index.rebuild_links();
+        Ok(index)
+    }
+
+    /// Recomputes the vault-wide wikilink resolution: `backlinks` and their diagnostics.
+    ///
+    /// This is a full rebuild, not an incremental one: a change to one file's headings can
+    /// flip whether an unrelated file's link resolves, so partial invalidation would be
+    /// incorrect, not just imprecise.
+    pub(crate) fn rebuild_links(&mut self) {
+        let (backlinks, link_diagnostics) = crate::links::resolve_links(&self.documents);
+        self.backlinks = backlinks;
+        self.link_diagnostics = link_diagnostics;
+        self.sync_diagnostics();
+    }
+
+    fn sync_diagnostics(&mut self) {
+        let mut combined = self.build_diagnostics.clone();
+        combined.extend(self.link_diagnostics.iter().cloned());
+        combined.sort_by(|left, right| {
+            left.file
+                .cmp(&right.file)
+                .then_with(|| left.message.cmp(&right.message))
+        });
+        self.diagnostics = combined;
+    }
+
+    /// Returns every indexed wikilink resolving to `file`, optionally narrowed to one heading
+    /// path within it.
+    pub fn backlinks(
+        &self,
+        file: &str,
+        heading_path: Option<&str>,
+    ) -> Result<Vec<crate::links::Backlink>, RetrievalError> {
+        let (file, _document) = self.document(file)?;
+        let entries = self.backlinks.get(file).cloned().unwrap_or_default();
+        Ok(match heading_path {
+            None => entries,
+            Some(path) => entries
+                .into_iter()
+                .filter(|entry| entry.target_heading_path.as_deref() == Some(path))
+                .collect(),
         })
     }
 
@@ -346,7 +401,7 @@ fn outline_section(source: &str, section: &Section) -> OutlineSection {
     }
 }
 
-fn provenance(file: &str, source: &str, section: &Section) -> Provenance {
+pub(crate) fn provenance(file: &str, source: &str, section: &Section) -> Provenance {
     Provenance {
         file: file.to_owned(),
         heading_path: section.heading_path.clone(),
@@ -374,6 +429,19 @@ fn line_number(source: &str, offset: u32) -> u32 {
         .filter(|byte| **byte == b'\n')
         .count() as u32
         + 1
+}
+
+/// Returns the deepest section whose span contains `offset`, or `None` if no section does.
+pub(crate) fn section_at(sections: &[Section], offset: u32) -> Option<&Section> {
+    for section in sections {
+        if offset >= section.span.start && offset < section.span.end {
+            if let Some(deeper) = section_at(&section.children, offset) {
+                return Some(deeper);
+            }
+            return Some(section);
+        }
+    }
+    None
 }
 
 pub(crate) fn find_section<'a>(sections: &'a [Section], heading_path: &str) -> Option<&'a Section> {

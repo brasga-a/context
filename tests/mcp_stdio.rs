@@ -133,7 +133,16 @@ fn stdio_session_initializes_and_drives_all_tools() {
         .iter()
         .filter_map(|tool| tool["name"].as_str())
         .collect();
-    assert_eq!(names, ["edit_section", "get_section", "outline", "search"]);
+    assert_eq!(
+        names,
+        [
+            "backlinks",
+            "edit_section",
+            "get_section",
+            "outline",
+            "search"
+        ]
+    );
 
     let outline = session.request(
         3,
@@ -210,6 +219,72 @@ fn stdio_session_initializes_and_drives_all_tools() {
             .iter()
             .any(|suggestion| suggestion == "Skills > Gun")
     );
+
+    session.close();
+}
+
+#[test]
+fn backlinks_over_stdio_resolves_and_narrows_and_surfaces_diagnostics() {
+    let mut session = McpSession::start();
+    session.initialize();
+
+    // player.md's Notes section links to lore/weapons.md both whole-file and by heading.
+    let all = session.request(
+        2,
+        "tools/call",
+        json!({
+            "name": "backlinks",
+            "arguments": {"file": "lore/weapons.md"}
+        }),
+    );
+    let entries = all["result"]["structuredContent"]["backlinks"]
+        .as_array()
+        .expect("backlinks array");
+    assert_eq!(entries.len(), 2);
+    assert!(
+        entries
+            .iter()
+            .all(|entry| entry["from"]["file"] == json!("player.md")
+                && entry["from"]["heading_path"] == json!("Notes"))
+    );
+    assert!(
+        entries
+            .iter()
+            .any(|entry| entry["target_heading_path"].is_null())
+    );
+    assert!(
+        entries
+            .iter()
+            .any(|entry| entry["target_heading_path"] == json!("Weapons > Gun Skill"))
+    );
+
+    let narrowed = session.request(
+        3,
+        "tools/call",
+        json!({
+            "name": "backlinks",
+            "arguments": {"file": "lore/weapons.md", "heading_path": "Weapons > Gun Skill"}
+        }),
+    );
+    let narrowed_entries = narrowed["result"]["structuredContent"]["backlinks"]
+        .as_array()
+        .expect("narrowed backlinks array");
+    assert_eq!(narrowed_entries.len(), 1);
+    assert_eq!(
+        narrowed_entries[0]["raw_target"],
+        json!("weapons#Gun Skill")
+    );
+
+    // Unresolved links from the same Notes section surface as vault diagnostics, not errors.
+    let outline = session.request(
+        4,
+        "tools/call",
+        json!({
+            "name": "outline",
+            "arguments": {"file": "player.md"}
+        }),
+    );
+    assert_ne!(outline["result"]["isError"], json!(true));
 
     session.close();
 }

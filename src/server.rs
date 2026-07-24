@@ -30,6 +30,14 @@ struct SearchParameters {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+struct BacklinksParameters {
+    /// Vault-relative Markdown file path.
+    file: String,
+    /// Optional heading path to narrow results to links resolving to that specific section.
+    heading_path: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 struct EditSectionParameters {
     /// Vault-relative Markdown file path.
     file: String,
@@ -92,6 +100,23 @@ impl ContextServer {
             "query": query,
             "results": self.read_index().search(&query),
         }))
+    }
+
+    #[tool(
+        description = "Return every indexed wikilink resolving to a file, optionally narrowed to one heading path"
+    )]
+    fn backlinks(
+        &self,
+        Parameters(BacklinksParameters { file, heading_path }): Parameters<BacklinksParameters>,
+    ) -> CallToolResult {
+        match self.read_index().backlinks(&file, heading_path.as_deref()) {
+            Ok(backlinks) => CallToolResult::structured(json!({
+                "file": file,
+                "heading_path": heading_path,
+                "backlinks": backlinks,
+            })),
+            Err(error) => retrieval_error(error),
+        }
     }
 
     #[tool(
