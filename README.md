@@ -1,3 +1,12 @@
+<p align="center">
+  <a href="https://github.com/brasga-a/context">
+    <picture>
+      <source srcset="assets/banner.png">
+      <img src="assets/banner.png" alt="Context logo">
+    </picture>
+  </a>
+</p>
+
 # context
 
 Give AI agents the smallest exact slice of a Markdown knowledge base that answers their question.
