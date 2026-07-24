@@ -20,9 +20,18 @@ AI agents over MCP.
     instead.
 - `crates/context-engine` — depends on `context-parser` and derives span-backed section trees,
   interprets YAML frontmatter, indexes Markdown vaults, and provides outlines, exact section
-  retrieval, deterministic fuzzy heading search, and hash-guarded section editing
+  retrieval, deterministic fuzzy heading search, hash-guarded section editing
   (`VaultIndex::edit_section`: body-only replacement verified against fresh disk bytes, atomic
-  write, single-document reindex).
+  write, single-document reindex), and a vault-wide wikilink graph (`VaultIndex::backlinks`).
+  Wikilink resolution (`[[Note]]`, `[[Note#Heading]]`, `[[#Heading]]`) is an **engine-level
+  convention** — the parser hands over the target as one opaque span; splitting on `#`, stem
+  matching a file part vault-wide, and matching a heading part by heading text are all decided
+  and implemented in `context-engine`, not `context-parser`. Unresolved links (no match, or
+  ambiguous) are non-fatal diagnostics, never a build failure. The link index is a whole-vault
+  derived structure, rebuilt in full after every `edit_section`/`reindex_file` — a change to one
+  file's headings can flip whether an unrelated file's link resolves, so partial invalidation
+  would be incorrect. There is no write-side link fix-up yet (renaming a heading does not update
+  inbound wikilinks).
 
 The formerly open purpose of `src/main.rs` is resolved: it is the MCP server / CLI front-end for
 `context-engine`. Start it on stdio with:
@@ -31,10 +40,10 @@ The formerly open purpose of `src/main.rs` is resolved: it is the MCP server / C
 cargo run -- serve <vault-dir>
 ```
 
-The server indexes the vault at startup and advertises `outline`, `get_section`, `search`, and
-`edit_section` tools until the stdio transport closes. Reads share the index behind a read-write
-lock; `edit_section` takes the write side and replaces one section's body guarded by the
-`content_hash` carried in every `get_section`/`search` provenance.
+The server indexes the vault at startup and advertises `outline`, `get_section`, `search`,
+`edit_section`, and `backlinks` tools until the stdio transport closes. Reads share the index
+behind a read-write lock; `edit_section` takes the write side and replaces one section's body
+guarded by the `content_hash` carried in every `get_section`/`search` provenance.
 
 Edition 2024 throughout.
 
