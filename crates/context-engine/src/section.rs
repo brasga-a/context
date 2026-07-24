@@ -13,6 +13,9 @@ pub struct Section {
     pub heading_path: String,
     /// Exact half-open byte range covered by this section.
     pub span: Span,
+    /// Byte range of the heading construct alone (ATX line, or setext content plus
+    /// underline), or `None` for the synthetic preamble.
+    pub heading_span: Option<Span>,
     /// Lower-level heading sections nested below this section.
     pub children: Vec<Section>,
     /// BLAKE3 hash of the exact source bytes covered by `span`.
@@ -49,6 +52,7 @@ pub fn build_section_tree(source: &str, document: &Document) -> Vec<Section> {
             level: 0,
             heading_path: "Preamble".to_owned(),
             span: preamble_span,
+            heading_span: None,
             children: Vec::new(),
             content_hash: hash_span(source, preamble_span),
         });
@@ -153,6 +157,7 @@ fn parse_siblings(
             level: *level,
             heading_path,
             span: section_span,
+            heading_span: Some(*span),
             children,
             content_hash: hash_span(source, section_span),
         });
@@ -175,7 +180,7 @@ fn block_span(block: &Block) -> Option<Span> {
     }
 }
 
-fn inline_text(source: &str, inlines: &[Inline]) -> String {
+pub(crate) fn inline_text(source: &str, inlines: &[Inline]) -> String {
     let mut text = String::new();
     for inline in inlines {
         match inline {
@@ -266,6 +271,33 @@ items";
         assert_eq!(
             player.span.slice(NESTED_DOCUMENT),
             &NESTED_DOCUMENT[NESTED_DOCUMENT.find("# Player").unwrap()..]
+        );
+    }
+
+    #[test]
+    fn heading_spans_cover_the_heading_construct_alone() {
+        let tree = build_section_tree(NESTED_DOCUMENT, &parse(NESTED_DOCUMENT));
+        assert_eq!(tree[0].heading_span, None);
+        let player = &tree[1];
+        assert_eq!(
+            player.heading_span.unwrap().slice(NESTED_DOCUMENT),
+            "# Player"
+        );
+        assert_eq!(
+            player.children[0]
+                .heading_span
+                .unwrap()
+                .slice(NESTED_DOCUMENT),
+            "## Skills"
+        );
+
+        let setext_source = "Title\n=====\nbody line";
+        let setext_tree = build_section_tree(setext_source, &parse(setext_source));
+        assert_eq!(setext_tree.len(), 1);
+        assert_eq!(setext_tree[0].level, 1);
+        assert_eq!(
+            setext_tree[0].heading_span.unwrap().slice(setext_source),
+            "Title\n====="
         );
     }
 

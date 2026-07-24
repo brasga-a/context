@@ -20,17 +20,21 @@ AI agents over MCP.
     instead.
 - `crates/context-engine` — depends on `context-parser` and derives span-backed section trees,
   interprets YAML frontmatter, indexes Markdown vaults, and provides outlines, exact section
-  retrieval, and deterministic fuzzy heading search.
+  retrieval, deterministic fuzzy heading search, and hash-guarded section editing
+  (`VaultIndex::edit_section`: body-only replacement verified against fresh disk bytes, atomic
+  write, single-document reindex).
 
-The formerly open purpose of `src/main.rs` is resolved: it is the read-only MCP server / CLI
-front-end for `context-engine`. Start it on stdio with:
+The formerly open purpose of `src/main.rs` is resolved: it is the MCP server / CLI front-end for
+`context-engine`. Start it on stdio with:
 
 ```
 cargo run -- serve <vault-dir>
 ```
 
-The server indexes the vault at startup and advertises `outline`, `get_section`, and `search`
-tools until the stdio transport closes.
+The server indexes the vault at startup and advertises `outline`, `get_section`, `search`, and
+`edit_section` tools until the stdio transport closes. Reads share the index behind a read-write
+lock; `edit_section` takes the write side and replaces one section's body guarded by the
+`content_hash` carried in every `get_section`/`search` provenance.
 
 Edition 2024 throughout.
 
