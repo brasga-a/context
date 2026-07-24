@@ -40,6 +40,8 @@ pub struct Provenance {
     pub heading_path: String,
     pub byte_range: ByteRange,
     pub line_range: LineRange,
+    /// BLAKE3 hash of the section's exact source bytes — the `edit_section` guard token.
+    pub content_hash: String,
 }
 
 /// One byte-exact section retrieval result.
@@ -112,8 +114,8 @@ impl Error for RetrievalError {}
 /// An in-memory structural index over all Markdown files below one vault root.
 #[derive(Clone, Debug)]
 pub struct VaultIndex {
-    root: PathBuf,
-    documents: BTreeMap<String, EngineDocument>,
+    pub(crate) root: PathBuf,
+    pub(crate) documents: BTreeMap<String, EngineDocument>,
     /// Non-fatal indexing and document diagnostics.
     pub diagnostics: Vec<VaultDiagnostic>,
 }
@@ -353,10 +355,11 @@ fn provenance(file: &str, source: &str, section: &Section) -> Provenance {
             end: section.span.end,
         },
         line_range: line_range(source, section.span),
+        content_hash: section.content_hash.clone(),
     }
 }
 
-fn line_range(source: &str, span: Span) -> LineRange {
+pub(crate) fn line_range(source: &str, span: Span) -> LineRange {
     let start = line_number(source, span.start);
     let end_offset = span.end.saturating_sub(1).max(span.start);
     LineRange {
@@ -373,7 +376,7 @@ fn line_number(source: &str, offset: u32) -> u32 {
         + 1
 }
 
-fn find_section<'a>(sections: &'a [Section], heading_path: &str) -> Option<&'a Section> {
+pub(crate) fn find_section<'a>(sections: &'a [Section], heading_path: &str) -> Option<&'a Section> {
     for section in sections {
         if section.heading_path == heading_path {
             return Some(section);
@@ -385,7 +388,7 @@ fn find_section<'a>(sections: &'a [Section], heading_path: &str) -> Option<&'a S
     None
 }
 
-fn visit_sections(sections: &[Section], visitor: &mut impl FnMut(&Section)) {
+pub(crate) fn visit_sections(sections: &[Section], visitor: &mut impl FnMut(&Section)) {
     for section in sections {
         visitor(section);
         visit_sections(&section.children, visitor);
@@ -410,7 +413,7 @@ fn relative_path(root: &Path, path: &Path) -> Option<String> {
     Some(components.join("/"))
 }
 
-fn normalize_request_path(path: &str) -> Option<String> {
+pub(crate) fn normalize_request_path(path: &str) -> Option<String> {
     let replaced = path.replace('\\', "/");
     let mut components = Vec::new();
     for component in replaced.split('/') {
@@ -490,7 +493,7 @@ fn path_depth(path: &str) -> usize {
     path.matches(" > ").count()
 }
 
-fn nearest<'a>(
+pub(crate) fn nearest<'a>(
     needle: &str,
     candidates: impl Iterator<Item = &'a str>,
     limit: usize,

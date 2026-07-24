@@ -10,3 +10,6 @@ blake3 = "1.8.2"
 context-parser = { path = "../context-parser" }
 serde = { version = "1.0.228", features = ["derive"] }
 yaml_serde = "0.10.4"
+
+[dev-dependencies]
+tempfile = "3"

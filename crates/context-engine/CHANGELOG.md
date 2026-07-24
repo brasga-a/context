@@ -18,6 +18,19 @@ is being introduced.
 - Added lenient YAML frontmatter interpretation with non-fatal diagnostics for invalid metadata.
 - Added recursive Markdown vault indexing, body-free outlines, byte-exact section retrieval with
   provenance and suggestions, and deterministic fuzzy heading search.
+- Added `VaultIndex::edit_section`: hash-guarded, body-only section replacement verified against
+  fresh disk bytes, with section-escape rejection, a span-tight splice preserving all surrounding
+  bytes, post-splice structural verification, and an atomic temp-file + rename write; returns the
+  edited document's outline as `HashedOutlineSection` with fresh per-section hashes. Failures are
+  typed via the new `EditError`.
+- Added `VaultIndex::reindex_file` for refreshing one possibly stale index entry from disk.
+- Added `Section::heading_span` recording the heading construct's own byte range (`None` for the
+  preamble).
+
+### Changed
+
+- `Provenance` (returned by `get_section` and `search`) now includes `content_hash`, the guard
+  token for `edit_section`.
 
 ## [0.1.0] - 2026-07-23
 
