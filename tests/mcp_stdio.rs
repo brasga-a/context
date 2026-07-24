@@ -16,9 +16,13 @@ struct McpSession {
 
 impl McpSession {
     fn start() -> Self {
+        Self::start_at(&fixture_vault())
+    }
+
+    fn start_at(vault: &std::path::Path) -> Self {
         let mut child = Command::new(env!("CARGO_BIN_EXE_context"))
             .arg("serve")
-            .arg(fixture_vault())
+            .arg(vault)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -59,6 +63,26 @@ impl McpSession {
                 return response;
             }
         }
+    }
+
+    fn initialize(&mut self) {
+        let initialized = self.request(
+            1,
+            "initialize",
+            json!({
+                "protocolVersion": "2025-11-25",
+                "capabilities": {},
+                "clientInfo": {
+                    "name": "context-integration-test",
+                    "version": "0.1.0"
+                }
+            }),
+        );
+        assert!(initialized["result"]["capabilities"]["tools"].is_object());
+        self.send(&json!({
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized"
+        }));
     }
 
     fn close(mut self) {
@@ -109,7 +133,7 @@ fn stdio_session_initializes_and_drives_all_tools() {
         .iter()
         .filter_map(|tool| tool["name"].as_str())
         .collect();
-    assert_eq!(names, ["get_section", "outline", "search"]);
+    assert_eq!(names, ["edit_section", "get_section", "outline", "search"]);
 
     let outline = session.request(
         3,
@@ -185,6 +209,115 @@ fn stdio_session_initializes_and_drives_all_tools() {
             .expect("error suggestions")
             .iter()
             .any(|suggestion| suggestion == "Skills > Gun")
+    );
+
+    session.close();
+}
+
+#[test]
+fn edit_section_round_trip_over_stdio() {
+    let vault = tempfile::TempDir::new().expect("create temp vault");
+    let player = "# Player\nlead\n\n## Skills\nskill intro\n\n### Gun\nFire the equipped weapon.\n\n## Inventory\nitems\n";
+    std::fs::write(vault.path().join("player.md"), player).expect("write fixture");
+
+    let mut session = McpSession::start_at(vault.path());
+    session.initialize();
+
+    let section = session.request(
+        2,
+        "tools/call",
+        json!({
+            "name": "get_section",
+            "arguments": {
+                "file": "player.md",
+                "heading_path": "Player > Skills > Gun"
+            }
+        }),
+    );
+    let hash = section["result"]["structuredContent"]["provenance"]["content_hash"]
+        .as_str()
+        .expect("read supplies the edit token")
+        .to_owned();
+    assert_eq!(hash.len(), 64);
+
+    let edited = session.request(
+        3,
+        "tools/call",
+        json!({
+            "name": "edit_section",
+            "arguments": {
+                "file": "player.md",
+                "heading_path": "Player > Skills > Gun",
+                "body": "Deal 3 damage.",
+                "expected_hash": hash
+            }
+        }),
+    );
+    assert_ne!(edited["result"]["isError"], json!(true));
+    let written = std::fs::read_to_string(vault.path().join("player.md")).expect("read back");
+    assert_eq!(
+        written,
+        "# Player\nlead\n\n## Skills\nskill intro\n\n### Gun\nDeal 3 damage.\n\n## Inventory\nitems\n"
+    );
+    let gun = &edited["result"]["structuredContent"]["sections"][0]["children"][0]["children"][0];
+    assert_eq!(gun["heading_path"], json!("Player > Skills > Gun"));
+    let fresh_hash = gun["content_hash"].as_str().expect("fresh hash").to_owned();
+    assert_ne!(fresh_hash, hash);
+
+    let conflict = session.request(
+        4,
+        "tools/call",
+        json!({
+            "name": "edit_section",
+            "arguments": {
+                "file": "player.md",
+                "heading_path": "Player > Skills > Gun",
+                "body": "stale write",
+                "expected_hash": hash
+            }
+        }),
+    );
+    assert_eq!(conflict["result"]["isError"], json!(true));
+    assert_eq!(
+        conflict["result"]["structuredContent"]["current_hash"],
+        json!(fresh_hash)
+    );
+
+    let escape = session.request(
+        5,
+        "tools/call",
+        json!({
+            "name": "edit_section",
+            "arguments": {
+                "file": "player.md",
+                "heading_path": "Player > Skills > Gun",
+                "body": "## Escape Attempt",
+                "expected_hash": fresh_hash
+            }
+        }),
+    );
+    assert_eq!(escape["result"]["isError"], json!(true));
+    assert!(
+        escape["result"]["structuredContent"]["message"]
+            .as_str()
+            .expect("escape message")
+            .contains("Escape Attempt")
+    );
+
+    let reread = session.request(
+        6,
+        "tools/call",
+        json!({
+            "name": "get_section",
+            "arguments": {
+                "file": "player.md",
+                "heading_path": "Player > Skills > Gun"
+            }
+        }),
+    );
+    assert_eq!(
+        reread["result"]["structuredContent"]["content"],
+        json!("### Gun\nDeal 3 damage.")
     );
 
     session.close();

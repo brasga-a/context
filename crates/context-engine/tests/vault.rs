@@ -53,6 +53,20 @@ fn exact_retrieval_returns_source_and_helpful_errors() {
             ..section.provenance.byte_range.end as usize],
         section.content
     );
+    assert_eq!(section.provenance.content_hash.len(), 64);
+    assert!(
+        section
+            .provenance
+            .content_hash
+            .chars()
+            .all(|character| character.is_ascii_hexdigit())
+    );
+    let searched = index.search("gun skill");
+    assert!(
+        searched
+            .iter()
+            .all(|result| result.provenance.content_hash.len() == 64)
+    );
 
     let error = index
         .get_section("player.md", "Skills > Cannon")
