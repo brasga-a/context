@@ -120,6 +120,19 @@ impl ContextServer {
     }
 
     #[tool(
+        description = "Re-walk the vault root, replace the index with the fresh result, and return what changed since the previous index"
+    )]
+    fn reindex_vault(&self) -> CallToolResult {
+        let mut index = self.index.write().expect("vault index lock poisoned");
+        match index.reindex_vault() {
+            Ok(diff) => CallToolResult::structured(json!(diff)),
+            Err(error) => CallToolResult::structured_error(json!({
+                "message": error.to_string(),
+            })),
+        }
+    }
+
+    #[tool(
         description = "Replace one section's body (heading preserved), guarded by its content_hash from a prior read"
     )]
     fn edit_section(
