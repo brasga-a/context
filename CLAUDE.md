@@ -32,6 +32,16 @@ AI agents over MCP.
   file's headings can flip whether an unrelated file's link resolves, so partial invalidation
   would be incorrect. There is no write-side link fix-up yet (renaming a heading does not update
   inbound wikilinks).
+  `VaultIndex::reindex_vault` is the only operation that re-reads disk on its own: it re-runs
+  `VaultIndex::build` against the same root and diffs the fresh index against the one being
+  replaced (files added/removed; per changed file, sections added/removed/modified by
+  `content_hash`). Reporting uses opposite-direction "root cause only" filtering — a modified
+  heading path is suppressed if a changed descendant exists (hash cascades upward through
+  nesting), an added/removed heading path is suppressed if its parent is also added/removed
+  (only the top of a new or deleted subtree is reported). A rename (file or heading) is always
+  reported as a plain delete + add, never detected as a rename, matching the identity model used
+  everywhere else in the engine. This is a known-imprecise heuristic, not a guarantee — see
+  `crates/context-engine/src/diff.rs`.
 
 The formerly open purpose of `src/main.rs` is resolved: it is the MCP server / CLI front-end for
 `context-engine`. Start it on stdio with:
@@ -41,9 +51,12 @@ cargo run -- serve <vault-dir>
 ```
 
 The server indexes the vault at startup and advertises `outline`, `get_section`, `search`,
-`edit_section`, and `backlinks` tools until the stdio transport closes. Reads share the index
-behind a read-write lock; `edit_section` takes the write side and replaces one section's body
-guarded by the `content_hash` carried in every `get_section`/`search` provenance.
+`edit_section`, `backlinks`, and `reindex_vault` tools until the stdio transport closes. Reads
+share the index behind a read-write lock; `edit_section` and `reindex_vault` take the write side.
+`edit_section` replaces one section's body guarded by the `content_hash` carried in every
+`get_section`/`search` provenance; `reindex_vault` re-walks the vault root and returns a diff —
+the only way an agent learns about changes made outside the server (another editor, a git
+checkout) without restarting it.
 
 Edition 2024 throughout.
 

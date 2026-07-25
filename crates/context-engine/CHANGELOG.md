@@ -33,6 +33,15 @@ is being introduced.
   The link index is a whole-vault derived structure, rebuilt in full after every
   `edit_section`/`reindex_file` call so a change to one file's headings correctly flips
   resolution for links in other, untouched files.
+- Added `VaultIndex::reindex_vault`: re-walks the vault root via `VaultIndex::build`, diffs the
+  result against the index being replaced, swaps to it, and returns the diff as `VaultDiff`
+  (`files_added`, `files_removed`, `files_changed: Vec<FileDiff>` with per-file
+  `sections_added`/`sections_removed`/`sections_modified`). Fails without diffing or replacing
+  the current index if the vault root is no longer valid. Reporting suppresses cascading and
+  redundant entries: a modified heading path is omitted if a changed descendant exists, and an
+  added/removed heading path is omitted if its parent was also added/removed — only the root
+  cause of each change is reported. Renames (file or heading) are always reported as delete plus
+  add, consistent with the existing heading-identity model; no rename detection is attempted.
 
 ### Changed
 

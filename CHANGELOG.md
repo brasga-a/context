@@ -22,10 +22,15 @@ MCP server CLI.
   one heading path, with full section provenance per link. End-to-end stdio coverage for
   resolved whole-file and file+heading links, narrowing by heading path, and unresolved links
   coexisting safely with normal tool operation.
+- Added the `reindex_vault` tool (no parameters): re-walks the vault root and returns what
+  changed since the previous index — the first tool that lets an agent notice changes made
+  outside the server. End-to-end stdio coverage for an external file add, an external section
+  edit, a no-op reindex, and a missing-root failure that leaves the previous index in place.
 
 ### Changed
 
 - Resolved the root binary's placeholder role as the MCP front-end for `context-engine` — now
   read-write at section granularity, no longer read-only.
-- The vault index sits behind a read-write lock: read tools share it, `edit_section` serializes
-  writes, and `get_section` / `search` responses now include each section's `content_hash`.
+- The vault index sits behind a read-write lock: read tools share it, `edit_section` and
+  `reindex_vault` serialize writes, and `get_section` / `search` responses now include each
+  section's `content_hash`.

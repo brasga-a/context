@@ -140,6 +140,7 @@ fn stdio_session_initializes_and_drives_all_tools() {
             "edit_section",
             "get_section",
             "outline",
+            "reindex_vault",
             "search"
         ]
     );
@@ -393,6 +394,118 @@ fn edit_section_round_trip_over_stdio() {
     assert_eq!(
         reread["result"]["structuredContent"]["content"],
         json!("### Gun\nDeal 3 damage.")
+    );
+
+    session.close();
+}
+
+#[test]
+fn reindex_vault_over_stdio_reports_external_changes_and_serves_the_fresh_state() {
+    let vault = tempfile::TempDir::new().expect("create temp vault");
+    std::fs::write(
+        vault.path().join("a.md"),
+        "## Skills\n\n### Gun\nold body\n",
+    )
+    .expect("write fixture");
+
+    let mut session = McpSession::start_at(vault.path());
+    session.initialize();
+
+    // No-op reindex: nothing changed yet.
+    let empty = session.request(
+        2,
+        "tools/call",
+        json!({"name": "reindex_vault", "arguments": {}}),
+    );
+    assert_ne!(empty["result"]["isError"], json!(true));
+    assert_eq!(
+        empty["result"]["structuredContent"]["files_added"],
+        json!([])
+    );
+    assert_eq!(
+        empty["result"]["structuredContent"]["files_changed"],
+        json!([])
+    );
+
+    // Externally: edit a.md's section, add a new file, remove nothing.
+    std::fs::write(
+        vault.path().join("a.md"),
+        "## Skills\n\n### Gun\nnew body\n",
+    )
+    .expect("edit fixture externally");
+    std::fs::write(vault.path().join("b.md"), "# B\nbody\n").expect("add file externally");
+
+    let diff = session.request(
+        3,
+        "tools/call",
+        json!({"name": "reindex_vault", "arguments": {}}),
+    );
+    assert_ne!(diff["result"]["isError"], json!(true));
+    let structured = &diff["result"]["structuredContent"];
+    assert_eq!(structured["files_added"], json!(["b.md"]));
+    assert_eq!(structured["files_removed"], json!([]));
+    let files_changed = structured["files_changed"].as_array().expect("array");
+    assert_eq!(files_changed.len(), 1);
+    assert_eq!(files_changed[0]["file"], json!("a.md"));
+    assert_eq!(
+        files_changed[0]["sections_modified"],
+        json!(["Skills > Gun"])
+    );
+
+    // Subsequent reads reflect the fresh state.
+    let section = session.request(
+        4,
+        "tools/call",
+        json!({
+            "name": "get_section",
+            "arguments": {"file": "a.md", "heading_path": "Skills > Gun"}
+        }),
+    );
+    assert_eq!(
+        section["result"]["structuredContent"]["content"],
+        json!("### Gun\nnew body")
+    );
+    let outline = session.request(
+        5,
+        "tools/call",
+        json!({"name": "outline", "arguments": {"file": "b.md"}}),
+    );
+    assert_ne!(outline["result"]["isError"], json!(true));
+
+    session.close();
+}
+
+#[test]
+fn reindex_vault_over_stdio_fails_when_the_root_is_gone() {
+    let vault = tempfile::TempDir::new().expect("create temp vault");
+    std::fs::write(vault.path().join("a.md"), "# A\nbody\n").expect("write fixture");
+    let root = vault.path().to_path_buf();
+
+    let mut session = McpSession::start_at(&root);
+    session.initialize();
+
+    drop(vault);
+    std::fs::remove_dir_all(&root).ok();
+
+    let result = session.request(
+        2,
+        "tools/call",
+        json!({"name": "reindex_vault", "arguments": {}}),
+    );
+    assert_eq!(result["result"]["isError"], json!(true));
+
+    // The server keeps serving the previous, unaffected index.
+    let section = session.request(
+        3,
+        "tools/call",
+        json!({
+            "name": "get_section",
+            "arguments": {"file": "a.md", "heading_path": "A"}
+        }),
+    );
+    assert_eq!(
+        section["result"]["structuredContent"]["content"],
+        json!("# A\nbody")
     );
 
     session.close();
